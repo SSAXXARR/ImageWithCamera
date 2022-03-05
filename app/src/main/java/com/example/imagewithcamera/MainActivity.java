@@ -12,6 +12,7 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -27,13 +28,15 @@ import android.view.WindowManager;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 
 
 public class MainActivity extends AppCompatActivity {
     ImageButton button;
     public TextureView textureView;
-
+    private ArrayList<String> permissionsArrayList = new ArrayList<String>();
+    private static final int MY_PERMISSIONS_REQUEST_RECORD_AUDIO = 202;
     //для проверки задняя или передняя камера у нас вкл.
     private String cameraId = "0";
     //объект работающий с нашим девайсом.
@@ -47,7 +50,6 @@ public class MainActivity extends AppCompatActivity {
     // позволяет отправлять и обрабатывать Message и выполняемые объекты, связанные с потоком
     Handler mBackgroundHundler;
     HandlerThread mBackgroundThread;
-
 
 
     @Override
@@ -66,14 +68,14 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
     //метод, который меняет камеры
     private void flipCamera() throws CameraAccessException {
-        if(cameraDevice != null && cameraId.equals("0")){
+        if (cameraDevice != null && cameraId.equals("0")) {
             closeCamera();
             cameraId = "1";
             openCamera(cameraId);
-        }
-        else if(cameraDevice != null && cameraId.equals("1")){
+        } else if (cameraDevice != null && cameraId.equals("1")) {
             closeCamera();
             cameraId = "0";
             openCamera(cameraId);
@@ -83,13 +85,31 @@ public class MainActivity extends AppCompatActivity {
     //проверяет разрешение на использование камеры.
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if(requestCode == 101){
-            if(grantResults[0] != PackageManager.PERMISSION_GRANTED){
+        if (requestCode == 101) {
+            //для камеры
+            if (grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(getApplicationContext(), "Sorry, camera permission is necessary", Toast.LENGTH_SHORT).show();
+                finish();
+            }
+            //для микрофона
+            else if(grantResults[1] != PackageManager.PERMISSION_GRANTED){
                 Toast.makeText(getApplicationContext(), "Sorry, camera permission is necessary", Toast.LENGTH_SHORT).show();
                 finish();
             }
         }
+
     }
+
+    //запрашивает все разрешения разом.
+    private void requestPerms() {
+        String[] permission = new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA};
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this, permission, 101);
+        }
+    }
+
 
     //срабатывает, когда наш textureView становится доступен и открывает камеру
     TextureView.SurfaceTextureListener textureListener = new TextureView.SurfaceTextureListener() {
@@ -148,11 +168,11 @@ public class MainActivity extends AppCompatActivity {
         DisplayMetrics metrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(metrics);
         int screenWidth = metrics.widthPixels;
-        int screenHeight = metrics.heightPixels/2;
+        int screenHeight = metrics.heightPixels / 2;
         Size sizeFinish = getOptimalSize(imageDimension, screenWidth, screenHeight);
         int cameraSizeW = sizeFinish.getWidth();
         int cameraSizeH = sizeFinish.getHeight();
-        texture.setDefaultBufferSize(cameraSizeW,cameraSizeH);
+        texture.setDefaultBufferSize(cameraSizeW, cameraSizeH);
         Surface surface = new Surface(texture);
         try {
             captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
@@ -163,7 +183,7 @@ public class MainActivity extends AppCompatActivity {
         cameraDevice.createCaptureSession(Arrays.asList(surface), new CameraCaptureSession.StateCallback() {
             @Override
             public void onConfigured(CameraCaptureSession session) {
-                if(cameraDevice == null){
+                if (cameraDevice == null) {
                     return;
                 }
                 cameraCaptureSessions = session;
@@ -173,6 +193,7 @@ public class MainActivity extends AppCompatActivity {
                     e.printStackTrace();
                 }
             }
+
             @Override
             public void onConfigureFailed(CameraCaptureSession cameraCaptureSession) {
                 Toast.makeText(getApplicationContext(), "Configuration change", Toast.LENGTH_LONG).show();
@@ -182,17 +203,18 @@ public class MainActivity extends AppCompatActivity {
 
     //обновление
     private void updatePreview() throws CameraAccessException {
-        if(cameraDevice == null){
+        if (cameraDevice == null) {
             return;
         }
         captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_MODE_AUTO);
 
         cameraCaptureSessions.setRepeatingRequest(captureRequestBuilder.build(), null, mBackgroundHundler);
     }
+
     //ищет самый лучший размер камеры для размера превью (в нашем случает 50% экрана)
-    public Size getOptimalSize(Size[] sizes, int w, int h){
+    public Size getOptimalSize(Size[] sizes, int w, int h) {
         final double ASPECT_TOLERANCE = 0.1;
-        double targetRatio=(double) h / w;
+        double targetRatio = (double) h / w;
 
         if (sizes == null) return null;
         Size optimalSize = null;
@@ -224,10 +246,9 @@ public class MainActivity extends AppCompatActivity {
 
     //метод, который открывает камеру
     private void openCamera(String idCamera) throws CameraAccessException {
-        if(ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED){
-            //PackageManager.PERMISSION_GRANTED == разрешение есть.
-            //запрашиваем разрешение, если его нет с помощью requestPermissions
-            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.CAMERA}, 101);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            //метод, который проверяет все разрешения разом.
+            requestPerms();
             return;
         }
         //получаем доступ к камере через CameraManager.
